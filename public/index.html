@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Ultra Wave Shooter - Multiplayer</title>
+    <style>
+        body { margin: 0; background: #050505; color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; user-select: none; }
+        canvas { display: block; margin: auto; background: radial-gradient(circle, #111 0%, #000 100%); border: 4px solid #333; }
+
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(20,20,20,1) 0%, rgba(0,0,0,1) 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100;
+        }
+
+        button {
+            padding: 14px 36px; font-size: 20px; cursor: pointer; border: 2px solid transparent;
+            border-radius: 8px; font-weight: bold; transition: all 0.2s; text-transform: uppercase; margin: 8px;
+        }
+        button:hover { transform: translateY(-2px); filter: brightness(1.2); }
+
+        #ui {
+            position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.85);
+            padding: 16px; border-radius: 12px; font-size: 18px; pointer-events: none;
+            display: none; border: 2px solid #444; min-width: 200px; z-index: 10;
+        }
+        .ui-stat { margin-bottom: 6px; display: flex; justify-content: space-between; }
+        .stat-label { color: #aaa; font-size: 15px; }
+        .stat-value { font-weight: bold; }
+
+        #ui2 {
+            position: absolute; top: 20px; right: 20px; background: rgba(0,0,0,0.85);
+            padding: 16px; border-radius: 12px; font-size: 18px; pointer-events: none;
+            display: none; border: 2px solid #e74c3c; min-width: 200px; z-index: 10;
+        }
+
+        #roomScreen input {
+            padding: 12px; font-size: 20px; border-radius: 8px; border: 2px solid #555;
+            background: #222; color: #fff; text-align: center; width: 200px; margin: 10px;
+        }
+        #status { color: #f1c40f; font-size: 18px; margin: 10px; }
+
+        #market {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #1a1a1a; padding: 30px; border: 4px solid #fff; display: none;
+            text-align: center; z-index: 150; border-radius: 20px; width: 420px;
+        }
+        .market-item {
+            background: #2c2c2c; margin: 8px 0; padding: 10px; border-radius: 8px;
+            display: flex; justify-content: space-between; align-items: center; border: 1px solid #444;
+        }
+        .buy-btn { padding: 7px 12px; font-size: 13px; width: 120px; }
+
+        #dialogueBox {
+            position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+            background: rgba(10,0,0,0.95); color: #ff3333; padding: 20px 40px;
+            border: 4px solid #ff0000; border-radius: 15px; font-size: 24px;
+            font-weight: 800; text-align: center; display: none; z-index: 200;
+            min-width: 400px; text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="ui-stat"><span class="stat-label">❤️ CAN (Sen):</span> <span id="hp" class="stat-value">100</span></div>
+    <div class="ui-stat"><span class="stat-label">🌊 DALGA:</span> <span id="wave" class="stat-value">1</span> / <span id="maxWaveDisp" class="stat-value">30</span></div>
+    <div class="ui-stat"><span class="stat-label">⚔️ ZORLUK:</span> <span id="diffDisp" class="stat-value">KOLAY</span></div>
+    <div class="ui-stat"><span class="stat-label">💰 PARA:</span> <span id="money" class="stat-value">0</span></div>
+    <div class="ui-stat" style="font-size:13px; color:#777;">Market için M tuşu</div>
+    <div id="market2hint" style="font-size:13px; color:#9b59b6; display:none;">Market II için N tuşu</div>
+</div>
+
+<div id="ui2">
+    <div class="ui-stat"><span class="stat-label">❤️ CAN (Takım):</span> <span id="hp2" class="stat-value">100</span></div>
+    <div class="ui-stat"><span class="stat-label">🎮 Oyuncu 2</span></div>
+</div>
+
+<div id="dialogueBox"></div>
+
+<!-- ANA EKRAN -->
+<div id="mainScreen" class="overlay">
+    <h1 style="font-size: 50px; letter-spacing: 6px; margin-bottom: 5px;">2D ULTRA WAVE SHOOTER</h1>
+    <p style="color: #666; margin-bottom: 30px;">Multiplayer</p>
+    <div style="display:flex; gap:10px;">
+        <button id="createBtn" style="background:#27ae60; color:#fff;" onclick="showDifficulty()">ODA OLUŞTUR</button>
+        <button id="joinBtn" style="background:#2980b9; color:#fff;" onclick="showJoinInput()">ODA'YA KATIL</button>
+    </div>
+    <input type="text" id="roomCodeInput" placeholder="Katılmak için kodu gir..." maxlength="6" 
+        style="display:none; margin-top:15px; text-transform:uppercase;">
+    <button id="joinConfirmBtn" style="display:none; background:#2980b9; color:#fff; margin-top:5px;">KATIL</button>
+    <p id="status" style="color:#e74c3c;"></p>
+</div>
+
+<!-- ZORLUK EKRANI -->
+<div id="difficultyScreen" class="overlay" style="display:none;">
+    <h2 style="font-size: 40px; margin-bottom: 20px;">ZORLUK SEÇ</h2>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+        <button id="easyDiff" style="background:#27ae60; color:#fff;">KOLAY MOD (30 Dalga)</button>
+        <button id="mediumDiff" style="background:#f39c12; color:#fff;">ORTA MOD (45 Dalga)</button>
+        <button id="hardDiff" style="background:#e74c3c; color:#fff;">ZOR MOD (60 Dalga)</button>
+    </div>
+    <button id="backBtn" style="background:#333; color:#888; margin-top:20px; font-size:14px;">GERİ</button>
+</div>
+
+<!-- LOBİ EKRANI -->
+<div id="lobbyScreen" class="overlay" style="display:none;">
+    <h2 style="font-size: 36px; margin-bottom: 5px;">LOBİ</h2>
+    <p id="lobbyCode" style="font-size:32px; color:#f1c40f; letter-spacing:8px; margin:10px 0;"></p>
+    <p style="color:#888; font-size:14px; margin-bottom:20px;">Bu kodu arkadaşına gönder</p>
+    <div id="playerList" style="margin-bottom:20px; font-size:18px;"></div>
+    <p id="lobbyStatus" style="color:#aaa; margin-bottom:20px;"></p>
+    <div style="display:flex; gap:10px;">
+        <button id="startBtn" style="background:#27ae60; color:#fff; display:none;">OYUNU BAŞLAT</button>
+        <button id="leaveBtn" style="background:#e74c3c; color:#fff;">OYUNDAN ÇIK</button>
+    </div>
+</div>
+
+<!-- OYUN SONU -->
+<div id="gameOverScreen" class="overlay" style="display:none;">
+    <h1 style="color:#ff0000; font-size:70px;">RUHUNUZ ELENDİ</h1>
+    <button onclick="location.reload()" style="background:#333; color:#fff;">YENİDEN</button>
+</div>
+
+<!-- ZAFER -->
+<div id="victoryScreen" class="overlay" style="display:none;">
+    <h1 style="color:#f1c40f; font-size:70px;">🏆 ZAFER 🏆</h1>
+    <button onclick="location.reload()" style="background:#f1c40f; color:#000;">YENİDEN</button>
+</div>
+
+<!-- MARKET -->
+<div id="market">
+    <h2 style="margin-top:0; color:#fff; border-bottom:2px solid #444; padding-bottom:8px;">GELİŞTİRMELER</h2>
+    <div class="market-item">
+        <span>Pompalı Tüfek (3'lü)</span>
+        <button id="buyShotgun" class="buy-btn">100 💰 AL</button>
+    </div>
+    <div class="market-item">
+        <span>Döner Balta</span>
+        <button id="buyAxe" class="buy-btn">200 💰 AL</button>
+    </div>
+    <div class="market-item">
+        <span>Tıbbi Yardım (+50 HP)</span>
+        <button id="buyBandage" class="buy-btn">50 💰 AL</button>
+    </div>
+    <div class="market-item">
+        <span>🤖 Drone (15sn)</span>
+        <button id="buyDrone" class="buy-btn">1000 💰 AL</button>
+    </div>
+    <div class="market-item" style="border-color:#00ffff;">
+        <span style="color:#00ffff;">⚡ Hiper Motor</span>
+        <button id="buyEngine" class="buy-btn" style="background:#00ffff;color:#000;">2000 💰 AL</button>
+    </div>
+    <div class="market-item" style="border-color:#9b59b6;">
+        <span style="color:#9b59b6;">✨ SEVİYE ATLA (Max HP)</span>
+        <button id="buyLevelUp" class="buy-btn" style="background:#9b59b6;color:#fff;">2000 💰 AL</button>
+    </div>
+    <button id="closeMarket" style="margin-top:15px; background:transparent; color:#888; border:1px solid #444; font-size:14px;">KAPAT</button>
+</div>
+
+<div id="market2" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:#1a1a1a; padding:30px; border:4px solid #9b59b6; display:none; text-align:center; z-index:150; border-radius:20px; width:420px;">
+    <h2 style="margin-top:0; color:#9b59b6; border-bottom:2px solid #9b59b6; padding-bottom:8px;">GELİŞTİRMELER II</h2>
+    <div class="market-item" style="border-color:#e74c3c;">
+        <span style="color:#e74c3c;">🔫 Pompalı V2 (9'lu Atış)</span>
+        <button id="buyShotgunV2" class="buy-btn" style="background:#e74c3c;color:#fff;">500 💰 AL</button>
+    </div>
+    <div class="market-item" style="border-color:#e67e22;">
+        <span style="color:#e67e22;">🪓 Balta V2 (Geniş Alan)</span>
+        <button id="buyAxeV2" class="buy-btn" style="background:#e67e22;color:#fff;">700 💰 AL</button>
+    </div>
+    <div class="market-item" style="border-color:#00ffff;">
+        <span style="color:#00ffff;">🤖 Drone V2 (3'lü, 30sn)</span>
+        <button id="buyDroneV2" class="buy-btn" style="background:#00ffff;color:#000;">2000 💰 AL</button>
+    </div>
+    <button id="closeMarket2" style="margin-top:15px; background:transparent; color:#888; border:1px solid #444; font-size:14px;">KAPAT</button>
+</div>
+
+<canvas id="game"></canvas>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+canvas.width = 900;
+canvas.height = 500;
+
+const socket = io();
+
+// Oyun değişkenleri
+let player, enemies, bullets, particles, wave, money, weapon, gameRunning;
+let keys = {}, mouse = {x:0, y:0};
+let axeRotation = 0, hyperEngine = false;
+let droneActive = false, droneTimer = 0, droneShootCooldown = 0, droneV2 = false;
+let levelUp = false, axeV2 = false;
+let screenShake = 0;
+let myPlayerNum = 0, isHost = false, twoPlayers = false;
+let maxWave = 30;
+let otherPlayer = null;
+let roomCode = '';
+let dialogueActive = false;
+
+// Sınıf - Partikül
+class Particle {
+    constructor(x, y, color) {
+        this.x = x; this.y = y; this.color = color;
+        this.size = Math.random()*4+1;
+        this.speedX = Math.random()*6-3;
+        this.speedY = Math.random()*6-3;
+        this.life = 1.0;
+        this.decay = Math.random()*0.02+0.01;
+    }
+    update() { this.x += this.speedX; this.y += this.speedY; this.life -= this.decay; }
+    draw() {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+function createExplosion(x, y, color, count=10) {
+    for(let i=0; i<count; i++) particles.push(new Particle(x, y, color));
+}
+
+function showDialogue(text, duration) {
+    const box = document.getElementById('dialogueBox');
+    box.innerText = text;
+    box.style.display = 'block';
+    dialogueActive = true;
+    if(duration) setTimeout(() => { box.style.display='none'; dialogueActive=false; }, duration);
+}
+
+// Global fonksiyonlar (HTML onclick için)
+function showDifficulty() {
+    document.getElementById('mainScreen').style.display = 'none';
+    document.getElementById('difficultyScreen').style.display = 'flex';
+}
+function showJoinInput() {
+    const inp = document.getElementById('roomCodeInput');
+    const btn = document.getElementById('joinConfirmBtn');
+    inp.style.display = inp.style.display==='none' ? 'block' : 'none';
+    btn.style.display = btn.style.display==='none' ? 'block' : 'none';
+}
+
+// Oda sistemi
+let selectedDifficulty = 'easy';
+
+function generateCode() {
+    return Math.random().toString(36).substr(2,6).toUpperCase();
+}
+
+function showLobby(code, playerNum) {
+    document.getElementById('mainScreen').style.display = 'none';
+    document.getElementById('difficultyScreen').style.display = 'none';
+    document.getElementById('lobbyScreen').style.display = 'flex';
+    document.getElementById('lobbyCode').innerText = 'KOD: ' + code;
+    updatePlayerList(playerNum);
+    if(playerNum === 1) {
+        document.getElementById('lobbyStatus').innerText = '2. oyuncu bekleniyor...';
+    } else {
+        document.getElementById('lobbyStatus').innerText = 'Host oyunu başlatacak...';
+    }
+}
+
+function updatePlayerList(count) {
+    const list = document.getElementById('playerList');
+    list.innerHTML = '';
+    for(let i=1; i<=2; i++) {
+        const color = i <= count ? (i===1?'#2980b9':'#e74c3c') : '#444';
+        const text = i <= count ? `🎮 Oyuncu ${i} (Hazır)` : `⏳ Oyuncu ${i} (Bekleniyor)`;
+        list.innerHTML += `<p style="color:${color}; margin:5px 0;">${text}</p>`;
+    }
+}
+
+// Oda oluştur
+document.getElementById('createBtn').onclick = () => {
+    document.getElementById('mainScreen').style.display = 'none';
+    document.getElementById('difficultyScreen').style.display = 'flex';
+};
+
+// Zorluk seç
+document.getElementById('easyDiff').onclick = () => { selectedDifficulty='easy'; createRoom(); };
+document.getElementById('mediumDiff').onclick = () => { selectedDifficulty='medium'; createRoom(); };
+document.getElementById('hardDiff').onclick = () => { selectedDifficulty='hard'; createRoom(); };
+document.getElementById('backBtn').onclick = () => {
+    document.getElementById('difficultyScreen').style.display = 'none';
+    document.getElementById('mainScreen').style.display = 'flex';
+};
+
+function createRoom() {
+    const code = generateCode();
+    roomCode = code;
+    socket.emit('joinRoom', { code, difficulty: selectedDifficulty });
+}
+
+// Odaya katıl
+document.getElementById('joinBtn').onclick = () => {
+    const inp = document.getElementById('roomCodeInput');
+    const btn = document.getElementById('joinConfirmBtn');
+    inp.style.display = inp.style.display==='none' ? 'block' : 'none';
+    btn.style.display = btn.style.display==='none' ? 'block' : 'none';
+};
+
+document.getElementById('joinConfirmBtn').onclick = () => {
+    const code = document.getElementById('roomCodeInput').value.toUpperCase();
+    if(!code) { document.getElementById('status').innerText = 'Kod girin!'; return; }
+    roomCode = code;
+    socket.emit('joinRoom', { code, difficulty: null });
+};
+
+// Oyunu başlat (sadece host)
+document.getElementById('startBtn').onclick = () => {
+    socket.emit('startGame', roomCode);
+};
+
+// Çık
+document.getElementById('leaveBtn').onclick = () => {
+    location.reload();
+};
+
+socket.on('joined', (data) => {
+    myPlayerNum = data.playerNum;
+    isHost = (myPlayerNum === 1);
+    showLobby(data.roomCode, data.playerCount);
+    if(isHost) {
+        document.getElementById('startBtn').style.display = 'block';
+    }
+});
+
+socket.on('playerJoined', (data) => {
+    updatePlayerList(data.playerCount);
+    document.getElementById('lobbyStatus').innerText = data.playerCount >= 2 ? 'Hazır! Host başlatabilir.' : '2. oyuncu bekleniyor...';
+});
+
+socket.on('roomFull', () => {
+    document.getElementById('status').innerText = 'Oda dolu!';
+});
+
+socket.on('gameStart', (data) => {
+    twoPlayers = data.twoPlayers;
+    selectedDifficulty = data.difficulty || 'easy';
+    document.getElementById('lobbyScreen').style.display = 'none';
+    document.getElementById('ui').style.display = 'block';
+    if(twoPlayers) document.getElementById('ui2').style.display = 'block';
+    initGame();
+});
+
+socket.on('otherPlayerMove', (data) => {
+    otherPlayer = data;
+});
+
+socket.on('otherShoot', (data) => {
+    bullets.push(...data);
+});
+
+socket.on('enemySync', (syncedEnemies) => {
+    if(!isHost) enemies = syncedEnemies;
+});
+
+socket.on('waveSync', (w) => { wave = w; });
+// Para kişisel - moneySync kullanılmıyor
+
+socket.on('otherHpUpdate', (data) => {
+    document.getElementById('hp2').innerText = Math.max(0, data.hp);
+});
+
+socket.on('gameOver', () => {
+    gameRunning = false;
+    document.getElementById('gameOverScreen').style.display = 'flex';
+});
+
+socket.on('enemyBullets', (newBullets) => {
+    bullets.push(...newBullets);
+});
+
+socket.on('takeDamage', (dmg) => {
+    player.hp -= dmg;
+    screenShake = 5;
+});
+
+socket.on('otherPlayerLeft', () => {
+    showDialogue('DİĞER OYUNCU AYRILDI!', 3000);
+    twoPlayers = false;
+    document.getElementById('ui2').style.display = 'none';
+});
+
+// Oyunu başlat
+function initGame() {
+    player = { x: myPlayerNum===1 ? 300 : 600, y: 250, size: 30, speed: 4, hp: 100, maxHp: 100 };
+    enemies = []; bullets = []; particles = [];
+    wave = 1; money = 0; weapon = 'normal'; levelUp = false; droneV2 = false; axeV2 = false;
+    maxWave = selectedDifficulty==='hard' ? 60 : selectedDifficulty==='medium' ? 45 : 30;
+    const diffNames = {easy:'KOLAY', medium:'ORTA', hard:'ZOR'};
+    document.getElementById('maxWaveDisp').innerText = maxWave;
+    document.getElementById('diffDisp').innerText = diffNames[selectedDifficulty] || 'KOLAY';
+    gameRunning = true; hyperEngine = false;
+    droneActive = false; screenShake = 0;
+    if(isHost) spawnWave();
+    requestAnimationFrame(gameLoop);
+}
+
+// Dalga oluştur (sadece host)
+function spawnWave() {
+    if(!isHost) return;
+    enemies = [];
+    const hpMult = twoPlayers ? 2 : 1;
+    const speedMult = selectedDifficulty === 'hard' ? 1.5 : selectedDifficulty === 'medium' ? 1.2 : 1;
+
+    // Özel dalgalar
+    if(selectedDifficulty === 'easy' && wave === 30) {
+        enemies.push({ x:410, y:50, size:80, hp:3000*hpMult, maxHp:3000*hpMult, speed:0, type:'finalBoss', shootCooldown:0 });
+        return;
+    }
+    if(selectedDifficulty === 'medium' && wave === 30) {
+        enemies.push({ x:410, y:50, size:80, hp:3000*hpMult, maxHp:3000*hpMult, speed:0, type:'finalBoss', shootCooldown:0 });
+        return;
+    }
+    if(selectedDifficulty === 'medium' && wave === 45) {
+        enemies.push({ x:400, y:50, size:100, hp:6000*hpMult, maxHp:6000*hpMult, speed:0, type:'theMurderer', shootCooldown:0 });
+        return;
+    }
+    if(selectedDifficulty === 'hard' && wave === 30) {
+        enemies.push({ x:410, y:50, size:80, hp:3000*hpMult, maxHp:3000*hpMult, speed:0, type:'finalBoss', shootCooldown:0 });
+        return;
+    }
+    if(selectedDifficulty === 'hard' && wave === 45) {
+        enemies.push({ x:400, y:50, size:100, hp:15000*hpMult, maxHp:15000*hpMult, speed:0, type:'theMurderer', shootCooldown:0 });
+        return;
+    }
+    if(selectedDifficulty === 'hard' && wave === 60) {
+        enemies.push({ x:400, y:50, size:120, hp:30000*hpMult, maxHp:30000*hpMult, speed:0, type:'theKing', shootCooldown:0, potionCooldown:0 });
+        return;
+    }
+
+    if(selectedDifficulty === 'easy') {
+        const count = Math.min(wave * 2 + 5, 30);
+        for(let i=0; i<count; i++) {
+            enemies.push({ x:Math.random()*800+50, y:Math.random()*400+50, size:25, hp:(30+wave*2)*hpMult, maxHp:(30+wave*2)*hpMult, speed:(1+Math.random())*speedMult, type:'normal' });
+        }
+        if(wave >= 3 && wave !== 30) { let mc=Math.floor((wave-3)/10)*5+5; for(let i=0;i<mc;i++) enemies.push({ x:Math.random()*800+50, y:Math.random()*400+50, size:35, hp:(100+wave*5)*hpMult, maxHp:(100+wave*5)*hpMult, speed:1.2*speedMult, type:'miniboss' }); }
+        if(wave >= 5) enemies.push({ x:50, y:50, size:45, hp:250*hpMult, maxHp:250*hpMult, speed:0.8, type:'boss' });
+        if(wave >= 10) enemies.push({ x:800, y:400, size:35, hp:150*hpMult, maxHp:150*hpMult, speed:1.5, type:'greenBoss', shootCooldown:0 });
+        if(wave >= 15) enemies.push({ x:450, y:50, size:70, hp:800*hpMult, maxHp:800*hpMult, speed:0.6, type:'bigboss' });
+
+    } else if(selectedDifficulty === 'medium') {
+        const miniBossCount = wave <= 30 ? wave : 30;
+        for(let i=0;i<miniBossCount;i++) enemies.push({ x:Math.random()*800+50, y:Math.random()*400+50, size:35, hp:(80+wave*10)*hpMult, maxHp:(80+wave*10)*hpMult, speed:(1+Math.random())*speedMult, type:'miniboss' });
+        if(wave >= 3) enemies.push({ x:800, y:400, size:35, hp:150*hpMult, maxHp:150*hpMult, speed:1.5*speedMult, type:'greenBoss', shootCooldown:0 });
+        if(wave >= 5) enemies.push({ x:50, y:50, size:45, hp:250*hpMult, maxHp:250*hpMult, speed:0.8*speedMult, type:'boss' });
+        if(wave >= 7) enemies.push({ x:450, y:50, size:70, hp:800*hpMult, maxHp:800*hpMult, speed:0.6*speedMult, type:'bigboss' });
+        if(wave > 30) { let ec=Math.floor((wave-30+1)/2); for(let i=0;i<ec;i++) { enemies.push({ x:50+i*60, y:50, size:45, hp:250*hpMult, maxHp:250*hpMult, speed:0.8, type:'boss' }); enemies.push({ x:800-i*60, y:400, size:35, hp:150*hpMult, maxHp:150*hpMult, speed:1.5, type:'greenBoss', shootCooldown:0 }); enemies.push({ x:450, y:50+i*40, size:70, hp:800*hpMult, maxHp:800*hpMult, speed:0.6, type:'bigboss' }); } }
+
+    } else if(selectedDifficulty === 'hard') {
+        const hardCount = wave > 30 && wave < 50 ? Math.max(1, 20-Math.floor((wave-30)/5)) : wave >= 50 ? 0 : Math.min(wave, 20);
+        for(let i=0;i<hardCount;i++) {
+            enemies.push({ x:Math.random()*800+50, y:Math.random()*400+50, size:45, hp:(250+wave*10)*hpMult, maxHp:(250+wave*10)*hpMult, speed:(0.8+Math.random()*0.4)*speedMult, type:'boss' });
+            enemies.push({ x:Math.random()*800+50, y:Math.random()*400+50, size:35, hp:(150+wave*10)*hpMult, maxHp:(150+wave*10)*hpMult, speed:(1.5+Math.random()*0.4)*speedMult, type:'greenBoss', shootCooldown:0 });
+        }
+        if(wave >= 3 && wave < 50) { let bb=Math.min(Math.floor((wave-3)/10)*3+3,9); let extra=bb===9?-Math.floor((wave-23)/3):0; let bc=Math.max(1,bb+extra); for(let i=0;i<bc;i++) enemies.push({ x:Math.random()*800+50, y:Math.random()*400+50, size:70, hp:(800+wave*10)*hpMult, maxHp:(800+wave*10)*hpMult, speed:0.6*speedMult, type:'bigboss' }); }
+        if(wave >= 5 && wave <= 30) { let hc=Math.floor((wave-5)/5)+1; for(let i=0;i<hc;i++) enemies.push({ x:Math.random()*700+100, y:Math.random()*300+100, size:60, hp:(1200+wave*15)*hpMult, maxHp:(1200+wave*15)*hpMult, speed:1.0, type:'hybridBoss', shootCooldown:0 }); }
+        if(wave >= 50) { let hc=3+(wave-50)*2; for(let i=0;i<hc;i++) enemies.push({ x:Math.random()*700+100, y:Math.random()*300+100, size:60, hp:(1200+wave*15)*hpMult, maxHp:(1200+wave*15)*hpMult, speed:1.0, type:'hybridBoss', shootCooldown:0 }); }
+    }
+
+    socket.emit('enemyUpdate', enemies);
+    socket.emit('waveUpdate', wave);
+}
+
+// Update
+function update() {
+    if(!gameRunning) return;
+
+    // Hareket
+    let spd = hyperEngine ? 7 : player.speed;
+    if(keys['w']) player.y -= spd;
+    if(keys['s']) player.y += spd;
+    if(keys['a']) player.x -= spd;
+    if(keys['d']) player.x += spd;
+    player.x = Math.max(15, Math.min(canvas.width-15, player.x));
+    player.y = Math.max(15, Math.min(canvas.height-15, player.y));
+
+    if(screenShake > 0) screenShake *= 0.9;
+
+    // Balta çizimi
+    if(weapon === 'axe' || weapon === 'axeV2' || weapon === 'shotgunV2+axeV2') {
+        let isV2 = weapon !== 'axe';
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(axeRotation);
+        if(isV2) {
+            ctx.fillStyle = '#e67e22';
+            ctx.fillRect(50,-18,30,36);
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(45,-3,45,6);
+        } else {
+            ctx.fillStyle = '#e67e22';
+            ctx.fillRect(55,-8,20,16);
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(50,-2,35,4);
+        }
+        ctx.restore();
+    }
+
+    // Drone
+    if(droneActive) {
+        droneTimer--;
+        if(droneTimer <= 0) droneActive = false;
+        droneShootCooldown++;
+        if(droneShootCooldown > 15 && enemies.length > 0) {
+            droneShootCooldown = 0;
+            let t = enemies[0];
+            let dx = (t.x+t.size/2)-player.x, dy = (t.y+t.size/2)-player.y;
+            let dist = Math.sqrt(dx*dx+dy*dy);
+            bullets.push({ x:player.x, y:player.y, vx:(dx/dist)*12, vy:(dy/dist)*12, fromPlayer:true, isDrone:true });
+        }
+    }
+
+    // Balta
+    if(weapon === 'axe' || weapon === 'axeV2' || weapon === 'shotgunV2+axeV2') {
+        let isV2 = weapon !== 'axe';
+        axeRotation += isV2 ? 0.22 : 0.18;
+        let axeRange = isV2 ? 130 : 75;
+        let axeDmg = isV2 ? 3.5 : 1.8;
+        enemies.forEach(e => {
+            if(Math.hypot(e.x+e.size/2-player.x, e.y+e.size/2-player.y) < axeRange)
+                e.hp -= axeDmg;
+        });
+    }
+
+    // Mermiler
+    bullets.forEach(b => { b.x += b.vx; b.y += b.vy; });
+    bullets = bullets.filter(b => b.x>-50 && b.x<950 && b.y>-50 && b.y<550);
+
+    // Partiküller
+    particles.forEach(p => p.update());
+    particles = particles.filter(p => p.life > 0);
+
+    if(isHost) {
+        // Düşman hareketi (sadece host hesaplar)
+        enemies.forEach(e => {
+            if(e.type === 'greenBoss' || e.type === 'hybridBoss') {
+                e.shootCooldown++;
+                let cooldownLimit = e.type === 'hybridBoss' ? 35 : 80;
+                if(e.shootCooldown > cooldownLimit) {
+                    e.shootCooldown = 0;
+                    let angle = Math.atan2(player.y-(e.y+e.size/2), player.x-(e.x+e.size/2));
+                    let spreadCount = e.type === 'hybridBoss' ? 5 : 3;
+                    let newBullets = [];
+                    for(let i=0; i<spreadCount; i++) {
+                        let spread = (i-(spreadCount-1)/2)*0.2;
+                        newBullets.push({ x:e.x+e.size/2, y:e.y+e.size/2, vx:Math.cos(angle+spread)*7, vy:Math.sin(angle+spread)*7, fromPlayer:false });
+                    }
+                    bullets.push(...newBullets);
+                    socket.emit('enemyBullets', newBullets);
+                }
+            }
+            // Hedef oyuncu (en yakın oyuncuya git)
+            let targetX = player.x, targetY = player.y;
+            if(otherPlayer) {
+                let d1 = Math.hypot(player.x-(e.x+e.size/2), player.y-(e.y+e.size/2));
+                let d2 = Math.hypot(otherPlayer.x-(e.x+e.size/2), otherPlayer.y-(e.y+e.size/2));
+                if(d2 < d1) { targetX = otherPlayer.x; targetY = otherPlayer.y; }
+            }
+            let dx = targetX-(e.x+e.size/2), dy = targetY-(e.y+e.size/2);
+            let dist = Math.sqrt(dx*dx+dy*dy);
+            if(dist > 0) { e.x += (dx/dist)*e.speed; e.y += (dy/dist)*e.speed; }
+
+            // Temas hasarı - her iki oyuncuya da
+            let myDist = Math.hypot(player.x-(e.x+e.size/2), player.y-(e.y+e.size/2));
+            if(myDist < 30) { player.hp -= 0.3; socket.emit('damageOther', 0.3); }
+            if(otherPlayer) {
+                let otherDist = Math.hypot(otherPlayer.x-(e.x+e.size/2), otherPlayer.y-(e.y+e.size/2));
+                if(otherDist < 30) socket.emit('damageOther', 0.3);
+            }
+        });
+
+        // Her 10 frame'de sync et
+        socket.emit('enemyUpdate', enemies);
+    }
+
+    // Çarpışma
+    bullets.forEach(b => {
+        if(b.fromPlayer) {
+            enemies.forEach(e => {
+                let dist = Math.hypot(b.x-(e.x+e.size/2), b.y-(e.y+e.size/2));
+                if(dist < e.size/2+5) {
+                    let dmg = b.isDrone ? 75 : 20;
+                    e.hp -= dmg;
+                    e.lastHitBy = socket.id;
+                    createExplosion(b.x, b.y, 'orange', 3);
+                    b.x = -1000;
+                }
+            });
+        } else {
+            let d = Math.hypot(b.x-player.x, b.y-player.y);
+            if(d < 20) { player.hp -= 8; screenShake=5; b.x=-1000; }
+        }
+    });
+
+    // Ölü düşmanlar
+    enemies = enemies.filter(e => {
+        if(e.hp <= 0) {
+            createExplosion(e.x+e.size/2, e.y+e.size/2, 'red', 15);
+            // Para sadece son çarpan oyuncuya gitsin
+            if(e.lastHitBy === socket.id) {
+                if(e.type==='normal') money+=25;
+                else if(e.type==='miniboss') money+=40;
+                else if(e.type==='boss') money+=50;
+                else if(e.type==='greenBoss') money+=60;
+                else if(e.type==='bigboss') money+=75;
+                else if(e.type==='hybridBoss') money+=100;
+                else if(e.type==='finalBoss') money+=1000;
+                else if(e.type==='theMurderer') money+=2000;
+                else if(e.type==='theKing') money+=5000;
+            } else if(!e.lastHitBy) {
+                // Hiç vurulmadıysa ikiye böl
+                if(e.type==='normal') money+=12;
+                else if(e.type==='miniboss') money+=20;
+            }
+            return false;
+        }
+        return true;
+    });
+
+    // Can güncelle
+    socket.emit('hpUpdate', player.hp);
+    document.getElementById('hp').innerText = Math.max(0, Math.ceil(player.hp));
+    document.getElementById('money').innerText = money;
+    document.getElementById('wave').innerText = wave;
+
+    // Oyuncu öldü
+    if(player.hp <= 0) {
+        player.hp = 0;
+        socket.emit('playerDied');
+    }
+
+    // Dalga geçişi (sadece host)
+    if(isHost && enemies.length === 0 && gameRunning) {
+        wave++;
+        socket.emit('waveUpdate', wave);
+        spawnWave();
+    }
+
+    // Pozisyon gönder
+    let angle = Math.atan2(mouse.y-player.y, mouse.x-player.x);
+    socket.emit('playerMove', { x:player.x, y:player.y, weapon, angle });
+}
+
+// Çizim
+function draw() {
+    ctx.save();
+    if(screenShake > 0) ctx.translate(Math.random()*screenShake-screenShake/2, Math.random()*screenShake-screenShake/2);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if(!gameRunning) { ctx.restore(); return; }
+
+    // Izgara
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    for(let i=0; i<canvas.width; i+=50) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke(); }
+    for(let i=0; i<canvas.height; i+=50) { ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke(); }
+
+    // Diğer oyuncu
+    if(otherPlayer) {
+        ctx.save();
+        ctx.translate(otherPlayer.x, otherPlayer.y);
+        ctx.rotate(otherPlayer.angle || 0);
+        ctx.fillStyle = '#e74c3c';
+        ctx.shadowBlur = 15; ctx.shadowColor = '#e74c3c';
+        ctx.fillRect(-15,-15,30,30);
+        ctx.fillStyle = '#333';
+        ctx.fillRect(12,-6,22,12);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+        // İsim etiketi
+        ctx.fillStyle = '#e74c3c';
+        ctx.font = 'bold 13px Arial';
+        ctx.fillText('P2', otherPlayer.x-8, otherPlayer.y-20);
+    }
+
+    // Oyuncu
+    let angle2 = Math.atan2(mouse.y-player.y, mouse.x-player.x);
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(angle2);
+    ctx.fillStyle = hyperEngine ? '#00ffff' : '#2980b9';
+    ctx.shadowBlur = 15; ctx.shadowColor = ctx.fillStyle;
+    ctx.fillRect(-15,-15,30,30);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(12,-6,22,12);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    ctx.fillStyle = '#2980b9';
+    ctx.font = 'bold 13px Arial';
+    ctx.fillText('P1', player.x-8, player.y-20);
+
+    // Balta
+    if(weapon === 'axe') {
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(axeRotation);
+        ctx.fillStyle = '#e67e22';
+        ctx.fillRect(55,-8,20,16);
+        ctx.fillStyle = '#bdc3c7';
+        ctx.fillRect(50,-2,35,4);
+        ctx.restore();
+    }
+
+    // Balta çizimi
+    if(weapon === 'axe' || weapon === 'axeV2' || weapon === 'shotgunV2+axeV2') {
+        let isV2 = weapon !== 'axe';
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(axeRotation);
+        if(isV2) {
+            ctx.fillStyle = '#e67e22';
+            ctx.fillRect(50,-18,30,36);
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(45,-3,45,6);
+        } else {
+            ctx.fillStyle = '#e67e22';
+            ctx.fillRect(55,-8,20,16);
+            ctx.fillStyle = '#bdc3c7';
+            ctx.fillRect(50,-2,35,4);
+        }
+        ctx.restore();
+    }
+
+    // Drone
+    if(droneActive) {
+        let t = Date.now()*0.005;
+        ctx.fillStyle = '#00ffff';
+        ctx.shadowBlur = 10; ctx.shadowColor = '#00ffff';
+        ctx.fillRect(player.x+Math.cos(t)*60-6, player.y+Math.sin(t)*60-6, 12, 12);
+        ctx.shadowBlur = 0;
+    }
+
+    // Mermiler
+    for(let b of bullets) {
+        ctx.fillStyle = b.fromPlayer ? (b.isDrone ? '#00ffff' : '#f1c40f') : '#ff0000';
+        if(b.isBoss) { ctx.shadowBlur=8; ctx.shadowColor=ctx.fillStyle; }
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.isBoss?8:5, 0, Math.PI*2); ctx.fill();
+        if(b.isBoss) ctx.shadowBlur=0;
+    }
+
+    // Partiküller
+    particles.forEach(p => p.draw());
+
+    // Düşmanlar
+    enemies.forEach(e => {
+        ctx.save();
+        if(e.type==='normal') ctx.fillStyle='#e74c3c';
+        else if(e.type==='miniboss') ctx.fillStyle='#FFB6C1';
+        else if(e.type==='hybridBoss') ctx.fillStyle='#2980b9';
+        else if(e.type==='finalBoss') ctx.fillStyle = e.hp < e.maxHp*0.33 ? '#c0392b' : '#1e8449';
+        else if(e.type==='theMurderer') ctx.fillStyle='#2c3e50';
+        else if(e.type==='theKing') ctx.fillStyle='#f1c40f';
+        else if(e.type==='boss') ctx.fillStyle='#8e44ad';
+        else if(e.type==='greenBoss') ctx.fillStyle='#2ecc71';
+        else if(e.type==='bigboss') ctx.fillStyle='#27ae60';
+        ctx.shadowBlur=10; ctx.shadowColor='black';
+        ctx.fillRect(e.x, e.y, e.size, e.size);
+        // Can barı
+        ctx.fillStyle='rgba(0,0,0,0.5)';
+        ctx.fillRect(e.x, e.y-15, e.size, 6);
+        ctx.fillStyle = (e.hp/e.maxHp)<0.3 ? '#ff0000' : '#2ecc71';
+        ctx.fillRect(e.x, e.y-15, e.size*(e.hp/e.maxHp), 6);
+        ctx.fillStyle='white'; ctx.font='bold 12px Arial';
+        ctx.fillText(e.type.toUpperCase(), e.x, e.y-20);
+        ctx.restore();
+    });
+
+    ctx.restore();
+}
+
+function gameLoop() {
+    update();
+    draw();
+    if(gameRunning) requestAnimationFrame(gameLoop);
+}
+
+// Ateş etme
+function handleShoot() {
+    if(!gameRunning || dialogueActive) return;
+    let angle = Math.atan2(mouse.y-player.y, mouse.x-player.x);
+    let count = (weapon==='shotgunV2' || weapon==='shotgunV2+axeV2') ? 9 : (weapon==='shotgun') ? 3 : 1;
+    let newBullets = [];
+    for(let i=0; i<count; i++) {
+        let spread = (i-(count-1)/2)*0.15;
+        newBullets.push({ x:player.x, y:player.y, vx:Math.cos(angle+spread)*9, vy:Math.sin(angle+spread)*9, fromPlayer:true });
+    }
+    bullets.push(...newBullets);
+    socket.emit('shoot', newBullets);
+    screenShake = Math.max(screenShake, 2);
+}
+
+// Input
+window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if(e.key.toLowerCase() === 'm') {
+        const m = document.getElementById('market');
+        m.style.display = m.style.display==='none'||m.style.display==='' ? 'block' : 'none';
+    }
+    if(e.key.toLowerCase() === 'n' && levelUp) {
+        const m2 = document.getElementById('market2');
+        m2.style.display = m2.style.display==='none'||m2.style.display==='' ? 'block' : 'none';
+    }
+});
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+canvas.addEventListener('mousemove', e => {
+    let rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX-rect.left;
+    mouse.y = e.clientY-rect.top;
+});
+canvas.addEventListener('mousedown', handleShoot);
+
+// Market
+document.getElementById('buyShotgun').onclick = () => { if(money>=100){ weapon='shotgun'; money-=100; } };
+document.getElementById('buyAxe').onclick = () => { if(money>=200){ weapon='axe'; money-=200; } };
+document.getElementById('buyBandage').onclick = () => { if(money>=50 && player.hp<player.maxHp){ player.hp=Math.min(player.maxHp, player.hp+50); money-=50; } };
+document.getElementById('buyDrone').onclick = () => { if(money>=1000){ droneActive=true; droneTimer=900; money-=1000; } };
+document.getElementById('buyEngine').onclick = () => { if(money>=2000 && !hyperEngine){ hyperEngine=true; money-=2000; } };
+document.getElementById('closeMarket').onclick = () => document.getElementById('market').style.display='none';
+document.getElementById('closeMarket2').onclick = () => document.getElementById('market2').style.display='none';
+
+document.getElementById('buyLevelUp').onclick = () => { 
+    if(money >= 2000 && !levelUp) { 
+        levelUp=true; player.maxHp=250; player.hp=250; money-=2000;
+        alert("Maksimum Seviye! Market II açıldı! (N tuşu)");
+    } 
+};
+document.getElementById('buyShotgunV2').onclick = () => { 
+    if(money >= 500) { 
+        weapon = weapon==='axeV2' ? 'shotgunV2+axeV2' : 'shotgunV2'; 
+        money-=500; 
+    } 
+};
+document.getElementById('buyAxeV2').onclick = () => { 
+    if(money >= 700) { 
+        weapon = weapon==='shotgunV2' ? 'shotgunV2+axeV2' : 'axeV2'; 
+        money-=700; 
+    } 
+};
+document.getElementById('buyDroneV2').onclick = () => { 
+    if(money >= 2000) { droneV2=true; droneActive=true; droneTimer=1800; money-=2000; } 
+};
+</script>
+</body>
+</html>
